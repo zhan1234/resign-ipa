@@ -8,6 +8,7 @@ import glob
 import shutil
 import  plistlib
 import  re
+import biplist
 
 def findCert():
   out = subprocess.Popen(['security', 'find-identity','-v','-p','codesigning'],stdout=subprocess.PIPE)
@@ -48,14 +49,30 @@ def copyReplaceRes(res,appDir):
 
 def resign(ipa, identity, provision,res="res"):
 
-  output = os.path.splitext(ipa)[0]  + '.resigned.ipa'
-  working_dir = tempfile.gettempdir()
+  output = os.path.join("out",os.path.splitext(ipa)[0]  + '.resigned.ipa')
   working_dir = os.path.join(os.getcwd(), "package")
 
   zfile = zipfile.ZipFile(ipa,'r')
   zfile.extractall(working_dir)
 
   app_dir = glob.glob(working_dir + '/Payload/*')[0]
+  #framework_dirs = glob.glob(app_dir+'/Frameworks/*')
+  plistPath = app_dir+"/Info.plist"
+  # fix ResourceRules
+  try:
+    #use plistlib
+    plist = plistlib.readPlist(plistPath)
+    plist.pop("CFBundleResourceSpecification")
+    plistlib.writePlist(plist,plistPath)
+  except:
+    try:
+      #use biplist
+      plist = biplist.readPlist(plistPath)
+      plist.pop("CFBundleResourceSpecification")
+      plistlib.writePlist(plist,plistPath)
+    except:
+      pass
+
   # replace resources before resign
   if res:
     if os.path.exists(res):
@@ -78,18 +95,16 @@ def resign(ipa, identity, provision,res="res"):
   shutil.rmtree("package")
 
 def findIpa():
-  result = None
-  for file in glob.glob("*.ipa"):
-    if file.find("resigned") == -1:
-      return file
-  return  result
+  result = glob.glob("*.ipa")
+  return result
 
 def main(argv=None):
-  ipa = findIpa()
+  ipas = findIpa()
   identity = findCert()
   provision = glob.glob("*.mobileprovision")[0]
-  print ipa,identity,provision
-  resign(ipa,identity,provision)
+  print ipas,identity,provision
+  for ipa in ipas:
+    resign(ipa,identity,provision)
 
 if __name__ == '__main__':
   main()
